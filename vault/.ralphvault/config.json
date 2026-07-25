@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "project": "agent-studio",
+  "vault_root": ".",
+  "settings": {
+    "token_budget": 2000,
+    "required_frontmatter": [
+      "type",
+      "load_tier",
+      "schema_version"
+    ],
+    "glossary": "glossary/terms.md",
+    "reconcile_after_commits": 25
+  },
+  "repos": [
+    {
+      "name": "agent-studio",
+      "source": ".",
+      "source_kind": "path",
+      "kind": "repo",
+      "stack": "auto",
+      "phase": "pending",
+      "last_sync_commit": null,
+      "last_reconcile_commit": null
+    }
+  ]
+}
