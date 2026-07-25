@@ -1,0 +1,15 @@
+# Ralph Progress Log — agent-studio
+Started: v0 foundation committed.
+---
+
+## Codebase Patterns
+- Python 3.12 via `uv`. Create env: `uv venv --python 3.12 .venv && . .venv/bin/activate && uv pip install -e ".[dev,runtime,rag,mcp]"`. Quality gate: `make check` (ruff + mypy + pytest).
+- The FOUR SEAMS in `seams/` are law: never call a concrete model/tool/db/authz directly. Use ModelProvider, ToolProvider, AuthzProvider, TenantContext. `from seams import ...`.
+- Offline-first: everything must run with `AGENT_STUDIO_OFFLINE=1` using EchoModelProvider + in-memory tool/RAG impls, no API key, no network. Real engines (langgraph/litellm/llama-index) are optional extras; guard imports (`import x` inside functions / try-except) so importing a module never hard-requires them.
+- Thread `tenant_id` EVERYWHERE (data, vectors, credentials, authz). Use `seams.tenancy.use_tenant(ctx)` for ambient scope; prefer explicit `tenant=` params at boundaries. Namespacing helper: `ctx.namespaced(key)`.
+- Governance = manifest allow-lists enforced by AuthzProvider. `AgentManifest.allowed_tool_set()` returns None when no list declared (allow-all in v0); `allowed_model_set()` always includes primary model; `allowed_source_set()` for RAG.
+- Contracts are FIXED in each package `__init__.py` (RunResult/AgentRuntime, RagIndex/Document/RetrievedChunk, WorkflowEngine/WorkflowRun, AgentManifest). Implement against them; do not change the contract without updating dependents.
+- Ruff: line-length 100, target py311, rules E/F/I/UP/B. Use `StrEnum` not `(str, Enum)`. Sort imports (ruff I). `from __future__ import annotations` at top of modules using new-union types under runtime eval (pydantic).
+- Tests live in `tests/`, pythonpath="." (see pyproject). `tests/test_foundation.py` locks the seam contracts — keep green.
+- Each story is built in its own git worktree/branch, verified, then merged to main via PR. Keep changes scoped to the story's module.
+---

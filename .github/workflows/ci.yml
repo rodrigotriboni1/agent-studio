@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Create venv + install (dev + runtime + rag + mcp)
+        run: |
+          uv venv --python 3.12 .venv
+          . .venv/bin/activate
+          uv pip install -e ".[dev,runtime,rag,mcp]"
+
+      - name: Lint (ruff)
+        run: |
+          . .venv/bin/activate
+          ruff check .
+
+      - name: Typecheck (mypy)
+        run: |
+          . .venv/bin/activate
+          mypy core seams api || true   # advisory until all stories land
+
+      - name: Test (pytest)
+        env:
+          AGENT_STUDIO_OFFLINE: "1"
+        run: |
+          . .venv/bin/activate
+          pytest -q

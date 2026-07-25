@@ -1,0 +1,214 @@
+{
+  "project": "agent-studio",
+  "branchName": "ralph/agent-studio-v0",
+  "description": "Governed, multi-tenant, MCP-native builder for agents, RAG and workflows. Adopt LangGraph/LlamaIndex/LiteLLM/pgvector/MCP; build the governance (versioned manifest + 4 seams). Foundation (seams, manifest schema, scaffold, CI) is already committed; these stories build the modules on top.",
+  "seams": ["ToolProvider(MCP)", "ModelProvider(LiteLLM)", "AuthzProvider(manifest->FGA)", "TenantContext"],
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Manifest versioning: diff + rollback + store",
+      "spec": "5.4",
+      "wave": 1,
+      "worktree": "us-001-manifest-versioning",
+      "model": "sonnet",
+      "dependsOn": [],
+      "description": "As a builder, I need immutable published manifest versions with diff and rollback so agent config is IaC.",
+      "acceptanceCriteria": [
+        "core/manifest/versioning.py: publish(draft)->immutable version (monotonic), diff(v_a,v_b) via deepdiff, rollback(id,version)->new version copying an older one",
+        "core/manifest/store.py: in-memory ManifestStore (tenant-scoped) with save/get/list/history; Protocol so a DB store swaps in later",
+        "Published versions cannot be mutated (publish creates a new version; draft edits allowed only pre-publish)",
+        "Unit tests offline: publish increments version, diff shows changed fields, rollback creates new version equal to target payload, tenant isolation enforced",
+        "ruff check . clean and pytest -q green"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Build on core/manifest/schema.py (AgentManifest). Everything tenant-scoped via TenantContext."
+    },
+    {
+      "id": "US-002",
+      "title": "Agent runtime via LangGraph (1 model + 1 tool, governed)",
+      "spec": "5.1",
+      "wave": 1,
+      "worktree": "us-002-runtime",
+      "model": "opus",
+      "dependsOn": [],
+      "description": "As a user, I run an agent from its manifest: it calls a model and a tool and answers, with governance enforced.",
+      "acceptanceCriteria": [
+        "core/runtime/agent.py implements AgentRuntime.run(manifest,message,tenant)->RunResult using LangGraph (StateGraph: model node <-> tool node loop)",
+        "Model calls ONLY via ModelProvider seam; tools ONLY via ToolProvider seam; every model/tool checked through AuthzProvider against manifest allow-lists (denied ones recorded in RunResult.denied, never invoked)",
+        "TenantContext threaded through every node (use_tenant)",
+        "Guardrails applied (max_tool_calls, temperature, system_suffix)",
+        "Offline test using EchoModelProvider + InMemoryToolProvider: agent invokes an allowed tool and returns; a non-allowed tool is denied not called",
+        "Degrades gracefully if langgraph missing (import guarded) but real path uses LangGraph; ruff clean, pytest green offline"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Hardest core module. Keep the graph small. RunResult contract is fixed in core/runtime/__init__.py."
+    },
+    {
+      "id": "US-003",
+      "title": "RAG: LlamaIndex + pgvector behind RagIndex, cited retrieval",
+      "spec": "5.2",
+      "wave": 1,
+      "worktree": "us-003-rag",
+      "model": "opus",
+      "dependsOn": [],
+      "description": "As a user, I ingest docs and the agent retrieves chunks with citations, tenant-isolated.",
+      "acceptanceCriteria": [
+        "core/rag/llamaindex_pgvector.py implements RagIndex (ingest/retrieve) using LlamaIndex + pgvector; collections namespaced by tenant_id (no cross-tenant leakage)",
+        "core/rag/memory.py: an in-memory RagIndex (embedding-free, keyword/overlap scoring) so examples+tests run offline with zero deps",
+        "retrieve returns RetrievedChunk with source+score+metadata for citation",
+        "Factory core/rag/factory.py picks memory impl when AGENT_STUDIO_OFFLINE=1 or pgvector unavailable, else pgvector",
+        "Offline tests: ingest N docs, retrieve returns relevant chunk with source; tenant A cannot see tenant B docs",
+        "ruff clean, pytest green offline (pgvector path guarded/skipped when no DB)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "RagIndex Protocol fixed in core/rag/__init__.py. pgvector integration test may be skipped without DATABASE_URL."
+    },
+    {
+      "id": "US-004",
+      "title": "Workflows: multi-step + multi-agent + human-in-the-loop",
+      "spec": "5.3",
+      "wave": 1,
+      "worktree": "us-004-workflows",
+      "model": "opus",
+      "dependsOn": [],
+      "description": "As a user, I run a workflow triage->specialist->human-review that pauses for approval and resumes.",
+      "acceptanceCriteria": [
+        "core/workflows/graph.py implements WorkflowEngine.start/resume using LangGraph with a durable interrupt for human-in-the-loop (WAITING_APPROVAL state + pending_step)",
+        "Definition is declarative dict (steps: agent|condition|human_approval, edges); conditional branching supported",
+        "resume(run_id, approval) continues a paused run to completion",
+        "Steps that run agents go through the runtime contract (accept an injected runner) so workflows stay decoupled from US-002 internals",
+        "Offline test: start a 3-step workflow, assert it pauses at human_approval, resume with approve, assert COMPLETED; reject path branches",
+        "ruff clean, pytest green offline"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "WorkflowEngine contract fixed in core/workflows/__init__.py. Inject the agent runner to avoid a hard dep on US-002."
+    },
+    {
+      "id": "US-008",
+      "title": "Builder UI (React + shadcn, minimal) over the API",
+      "spec": "5.5",
+      "wave": 1,
+      "worktree": "us-008-builder",
+      "model": "sonnet",
+      "dependsOn": [],
+      "description": "As a builder, I create/edit an agent, attach RAG sources, assemble a workflow and run it, in a minimal UI.",
+      "acceptanceCriteria": [
+        "builder/ Vite + React + TS + Tailwind + shadcn/ui scaffold that builds (pnpm build)",
+        "Screens: Agents list, Agent editor (name, system prompt, model, allowed tools, RAG sources), Run panel (send message, show answer + citations + denials), Workflow runner (start, approve/reject)",
+        "Typed API client in builder/src/lib/api.ts targeting the FastAPI contract (agents CRUD, run, ingest, versions, workflows); base URL from VITE_API_URL",
+        "Uses a mock/fixture layer so the UI renders without a live backend (MSW or a simple fetch shim toggled by VITE_USE_MOCKS)",
+        "pnpm build succeeds; README in builder/ explains dev + mock mode",
+        "eslint clean"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Frontend only; treat the API as a contract (ADR-0004 API-first). Independent of Python stories."
+    },
+    {
+      "id": "US-005",
+      "title": "FastAPI routers: agents CRUD, run, ingest, versions, workflows",
+      "spec": "api",
+      "wave": 2,
+      "worktree": "us-005-api",
+      "model": "sonnet",
+      "dependsOn": ["US-001", "US-002", "US-003", "US-004"],
+      "description": "As an integrator, I drive the whole system over HTTP.",
+      "acceptanceCriteria": [
+        "api/routers/{agents,runs,ingest,versions,workflows}.py mounted in api/main.py",
+        "Endpoints: POST/GET/PUT /agents, POST /agents/{id}/publish, GET /agents/{id}/versions, POST /agents/{id}/rollback, POST /agents/{id}/run, POST /sources/{name}/ingest, POST /workflows/run, POST /workflows/{id}/resume",
+        "TenantContext resolved from X-Tenant-Id header (default tenant when absent) and threaded into every call",
+        "Pydantic request/response models; wired to core stores/runtime/rag/workflows via the seams (EchoModelProvider + memory impls when AGENT_STUDIO_OFFLINE=1)",
+        "FastAPI TestClient tests offline for each endpoint (happy path + a governance-denied tool case)",
+        "ruff clean, pytest green offline"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Depends on wave 1 modules being merged to main first."
+    },
+    {
+      "id": "US-006",
+      "title": "CLI subcommands (agent create/run, ingest, versions)",
+      "spec": "api/cli",
+      "wave": 2,
+      "worktree": "us-006-cli",
+      "model": "sonnet",
+      "dependsOn": ["US-001", "US-002", "US-003"],
+      "description": "As a developer, I drive core flows from the terminal.",
+      "acceptanceCriteria": [
+        "api/cli.py Typer commands: agent create/list/show/run, source ingest, version list/diff/rollback",
+        "Reads/writes through the same core stores as the API (shared, not duplicated)",
+        "Offline by default (AGENT_STUDIO_OFFLINE=1)",
+        "CliRunner tests for create+run+ingest happy paths",
+        "ruff clean, pytest green"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Depends on wave 1. Reuse API service layer where possible."
+    },
+    {
+      "id": "US-007",
+      "title": "Examples: 1 agent + 1 RAG + 1 workflow that run out of the box",
+      "spec": "examples",
+      "wave": 2,
+      "worktree": "us-007-examples",
+      "model": "sonnet",
+      "dependsOn": ["US-002", "US-003", "US-004"],
+      "description": "As a new user, `make examples` runs all 3 demos with no code edits and no API key.",
+      "acceptanceCriteria": [
+        "examples/agent_demo.py: manifest-defined agent uses a tool and answers",
+        "examples/rag_demo.py: ingest sample docs, agent answers citing sources",
+        "examples/workflow_demo.py: triage->specialist->human review, auto-approves in demo, runs end to end",
+        "examples/run_all.py runs all three and prints results; `python -m examples.run_all` works",
+        "All run offline (EchoModelProvider + memory RAG); Makefile `examples` target works",
+        "ruff clean; a smoke test asserts run_all completes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Depends on wave 1. This is DoD item: git clone && make dev runs the 3 examples."
+    },
+    {
+      "id": "US-009",
+      "title": "Governance v0 end-to-end + seams documentation",
+      "spec": "5.6",
+      "wave": 3,
+      "worktree": "us-009-governance",
+      "model": "opus",
+      "dependsOn": ["US-002", "US-005"],
+      "description": "As a platform owner, governance filters tools/models/sources by manifest, tenant threaded everywhere, documented.",
+      "acceptanceCriteria": [
+        "End-to-end test: an agent whose manifest omits a tool is denied that tool at runtime AND via the API; a disallowed model is refused",
+        "TenantContext demonstrably isolates data/vectors across two tenants in one test",
+        "docs/seams.md documents the 4 seams, current stub vs future target, and how to swap implementations",
+        "docs/governance.md explains manifest allow-lists as the enforced surface",
+        "ruff clean, pytest green offline"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Ties the governance story together. Depends on runtime + API merged."
+    },
+    {
+      "id": "US-010",
+      "title": "Quickstart + Definition of Done verification",
+      "spec": "docs/DoD",
+      "wave": 3,
+      "worktree": "us-010-docs",
+      "model": "sonnet",
+      "dependsOn": ["US-005", "US-007", "US-008", "US-009"],
+      "description": "As a maintainer, I verify the section-7 Definition of Done and document quickstart.",
+      "acceptanceCriteria": [
+        "docs/quickstart.md: clone -> make dev -> make examples -> make api, with expected output",
+        "A DoD checklist doc (docs/definition-of-done.md) maps each section-7 item to where it is satisfied (with test/file refs)",
+        "README positioning line present and accurate (governed, multi-tenant, MCP-native)",
+        "make check green on a clean clone (documented)",
+        "ruff clean"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Final story. Verifies the whole repo against the spec DoD."
+    }
+  ]
+}
