@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PlusCircle } from 'lucide-react'
+import { PlusCircle, Bot } from 'lucide-react'
+import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,19 +21,19 @@ export default function AgentsListPage() {
   }, [])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Agents</h1>
-          <p className="text-muted-foreground mt-1">Create and manage your governed agents.</p>
-        </div>
-        <Button asChild>
-          <Link to="/agents/new">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            New Agent
-          </Link>
-        </Button>
-      </div>
+    <div>
+      <PageHeader
+        title="Agents"
+        description="Create and manage your governed, MCP-native agents."
+        actions={
+          <Button asChild>
+            <Link to="/agents/new">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              New Agent
+            </Link>
+          </Button>
+        }
+      />
 
       {loading && <p className="text-muted-foreground">Loading agents...</p>}
       {error && <p className="text-destructive">{error}</p>}
@@ -53,7 +54,12 @@ export default function AgentsListPage() {
           <Card key={agent.id} className="hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
-                <CardTitle className="text-lg">{agent.name}</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                    <Bot className="h-4 w-4" />
+                  </span>
+                  {agent.name}
+                </CardTitle>
                 <Badge variant={agent.status === 'published' ? 'default' : 'secondary'}>
                   {agent.status}
                 </Badge>
