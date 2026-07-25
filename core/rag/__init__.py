@@ -61,4 +61,18 @@ class RagIndex(Protocol):
         ...
 
 
-__all__ = ["Document", "RetrievedChunk", "RagIndex"]
+# Concrete implementations + factory are imported after the contract above so
+# they can safely ``from core.rag import Document, RetrievedChunk`` without a
+# circular-import failure at package init.
+from core.rag.factory import make_rag_index  # noqa: E402
+from core.rag.llamaindex_pgvector import PgVectorRagIndex  # noqa: E402
+from core.rag.memory import InMemoryRagIndex  # noqa: E402
+
+__all__ = [
+    "Document",
+    "RetrievedChunk",
+    "RagIndex",
+    "make_rag_index",
+    "InMemoryRagIndex",
+    "PgVectorRagIndex",
+]
