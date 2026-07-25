@@ -2,6 +2,25 @@
 Started: v0 foundation committed.
 ---
 
+## v0 COMPLETE — all 10 stories merged
+- US-001 manifest versioning (diff/rollback/store) — PR #2
+- US-002 agent runtime via LangGraph, governed — PR #3
+- US-003 RAG (LlamaIndex+pgvector), tenant-isolated — PR #4
+- US-004 workflows (multi-step + human-in-the-loop) — PR #5
+- US-007 runnable examples (agent, RAG, workflow) — PR #6
+- US-006 CLI subcommands + JSON store — PR #7
+- US-005 FastAPI routers (agents, run, ingest, versions, workflows) — PR #8
+- US-008 minimal builder UI (React + shadcn) — PR #9
+- US-009 governance v0 end-to-end + seam docs — PR #10
+- US-010 quickstart + Definition of Done verification — PR #11
+Each built in an isolated git worktree by a specialized subagent (opus for core
+runtime/rag/workflows/governance; sonnet for versioning/api/cli/examples/builder/docs),
+verified independently (ruff + offline pytest), merged via PR.
+Final state on main: 101 passed, 1 skipped (pgvector DB-gated), ruff clean,
+`python -m examples.run_all` 3/3, all 6 §7 DoD items PASS.
+mypy: advisory only (third-party numpy/mypy stub incompat; zero project-source errors).
+---
+
 ## Codebase Patterns
 - Python 3.12 via `uv`. Create env: `uv venv --python 3.12 .venv && . .venv/bin/activate && uv pip install -e ".[dev,runtime,rag,mcp]"`. Quality gate: `make check` (ruff + mypy + pytest).
 - The FOUR SEAMS in `seams/` are law: never call a concrete model/tool/db/authz directly. Use ModelProvider, ToolProvider, AuthzProvider, TenantContext. `from seams import ...`.

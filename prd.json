@@ -2,7 +2,12 @@
   "project": "agent-studio",
   "branchName": "ralph/agent-studio-v0",
   "description": "Governed, multi-tenant, MCP-native builder for agents, RAG and workflows. Adopt LangGraph/LlamaIndex/LiteLLM/pgvector/MCP; build the governance (versioned manifest + 4 seams). Foundation (seams, manifest schema, scaffold, CI) is already committed; these stories build the modules on top.",
-  "seams": ["ToolProvider(MCP)", "ModelProvider(LiteLLM)", "AuthzProvider(manifest->FGA)", "TenantContext"],
+  "seams": [
+    "ToolProvider(MCP)",
+    "ModelProvider(LiteLLM)",
+    "AuthzProvider(manifest->FGA)",
+    "TenantContext"
+  ],
   "userStories": [
     {
       "id": "US-001",
@@ -21,8 +26,8 @@
         "ruff check . clean and pytest -q green"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Build on core/manifest/schema.py (AgentManifest). Everything tenant-scoped via TenantContext."
+      "passes": true,
+      "notes": "Build on core/manifest/schema.py (AgentManifest). Everything tenant-scoped via TenantContext. | DONE: merged via PR."
     },
     {
       "id": "US-002",
@@ -42,8 +47,8 @@
         "Degrades gracefully if langgraph missing (import guarded) but real path uses LangGraph; ruff clean, pytest green offline"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Hardest core module. Keep the graph small. RunResult contract is fixed in core/runtime/__init__.py."
+      "passes": true,
+      "notes": "Hardest core module. Keep the graph small. RunResult contract is fixed in core/runtime/__init__.py. | DONE: merged via PR."
     },
     {
       "id": "US-003",
@@ -63,8 +68,8 @@
         "ruff clean, pytest green offline (pgvector path guarded/skipped when no DB)"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "RagIndex Protocol fixed in core/rag/__init__.py. pgvector integration test may be skipped without DATABASE_URL."
+      "passes": true,
+      "notes": "RagIndex Protocol fixed in core/rag/__init__.py. pgvector integration test may be skipped without DATABASE_URL. | DONE: merged via PR."
     },
     {
       "id": "US-004",
@@ -84,8 +89,8 @@
         "ruff clean, pytest green offline"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "WorkflowEngine contract fixed in core/workflows/__init__.py. Inject the agent runner to avoid a hard dep on US-002."
+      "passes": true,
+      "notes": "WorkflowEngine contract fixed in core/workflows/__init__.py. Inject the agent runner to avoid a hard dep on US-002. | DONE: merged via PR."
     },
     {
       "id": "US-008",
@@ -105,8 +110,8 @@
         "eslint clean"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "Frontend only; treat the API as a contract (ADR-0004 API-first). Independent of Python stories."
+      "passes": true,
+      "notes": "Frontend only; treat the API as a contract (ADR-0004 API-first). Independent of Python stories. | DONE: merged via PR."
     },
     {
       "id": "US-005",
@@ -115,7 +120,12 @@
       "wave": 2,
       "worktree": "us-005-api",
       "model": "sonnet",
-      "dependsOn": ["US-001", "US-002", "US-003", "US-004"],
+      "dependsOn": [
+        "US-001",
+        "US-002",
+        "US-003",
+        "US-004"
+      ],
       "description": "As an integrator, I drive the whole system over HTTP.",
       "acceptanceCriteria": [
         "api/routers/{agents,runs,ingest,versions,workflows}.py mounted in api/main.py",
@@ -126,8 +136,8 @@
         "ruff clean, pytest green offline"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Depends on wave 1 modules being merged to main first."
+      "passes": true,
+      "notes": "Depends on wave 1 modules being merged to main first. | DONE: merged via PR."
     },
     {
       "id": "US-006",
@@ -136,7 +146,11 @@
       "wave": 2,
       "worktree": "us-006-cli",
       "model": "sonnet",
-      "dependsOn": ["US-001", "US-002", "US-003"],
+      "dependsOn": [
+        "US-001",
+        "US-002",
+        "US-003"
+      ],
       "description": "As a developer, I drive core flows from the terminal.",
       "acceptanceCriteria": [
         "api/cli.py Typer commands: agent create/list/show/run, source ingest, version list/diff/rollback",
@@ -146,8 +160,8 @@
         "ruff clean, pytest green"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "Depends on wave 1. Reuse API service layer where possible."
+      "passes": true,
+      "notes": "Depends on wave 1. Reuse API service layer where possible. | DONE: merged via PR."
     },
     {
       "id": "US-007",
@@ -156,7 +170,11 @@
       "wave": 2,
       "worktree": "us-007-examples",
       "model": "sonnet",
-      "dependsOn": ["US-002", "US-003", "US-004"],
+      "dependsOn": [
+        "US-002",
+        "US-003",
+        "US-004"
+      ],
       "description": "As a new user, `make examples` runs all 3 demos with no code edits and no API key.",
       "acceptanceCriteria": [
         "examples/agent_demo.py: manifest-defined agent uses a tool and answers",
@@ -167,8 +185,8 @@
         "ruff clean; a smoke test asserts run_all completes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Depends on wave 1. This is DoD item: git clone && make dev runs the 3 examples."
+      "passes": true,
+      "notes": "Depends on wave 1. This is DoD item: git clone && make dev runs the 3 examples. | DONE: merged via PR."
     },
     {
       "id": "US-009",
@@ -177,7 +195,10 @@
       "wave": 3,
       "worktree": "us-009-governance",
       "model": "opus",
-      "dependsOn": ["US-002", "US-005"],
+      "dependsOn": [
+        "US-002",
+        "US-005"
+      ],
       "description": "As a platform owner, governance filters tools/models/sources by manifest, tenant threaded everywhere, documented.",
       "acceptanceCriteria": [
         "End-to-end test: an agent whose manifest omits a tool is denied that tool at runtime AND via the API; a disallowed model is refused",
@@ -187,8 +208,8 @@
         "ruff clean, pytest green offline"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "Ties the governance story together. Depends on runtime + API merged."
+      "passes": true,
+      "notes": "Ties the governance story together. Depends on runtime + API merged. | DONE: merged via PR."
     },
     {
       "id": "US-010",
@@ -197,7 +218,12 @@
       "wave": 3,
       "worktree": "us-010-docs",
       "model": "sonnet",
-      "dependsOn": ["US-005", "US-007", "US-008", "US-009"],
+      "dependsOn": [
+        "US-005",
+        "US-007",
+        "US-008",
+        "US-009"
+      ],
       "description": "As a maintainer, I verify the section-7 Definition of Done and document quickstart.",
       "acceptanceCriteria": [
         "docs/quickstart.md: clone -> make dev -> make examples -> make api, with expected output",
@@ -207,8 +233,8 @@
         "ruff clean"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "Final story. Verifies the whole repo against the spec DoD."
+      "passes": true,
+      "notes": "Final story. Verifies the whole repo against the spec DoD. | DONE: merged via PR."
     }
   ]
 }
