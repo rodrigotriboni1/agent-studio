@@ -1,8 +1,7 @@
 """FastAPI application factory.
 
-v0 skeleton: health + version + seam wiring. CRUD for agents, run, ingest and
-versions are added by their respective stories, each mounted as its own router so
-work stays isolated.
+v0 skeleton: health + version + seam wiring. Routers for agents CRUD, run,
+ingest and workflows are mounted here (US-005).
 """
 
 from __future__ import annotations
@@ -35,9 +34,14 @@ def create_app() -> FastAPI:
             "offline": os.getenv("AGENT_STUDIO_OFFLINE", "0"),
         }
 
-    # Routers are attached here by their stories:
-    #   from api.routers import agents, runs, ingest, versions, workflows
-    #   app.include_router(agents.router)
+    # Mount routers (US-005)
+    from api.routers import agents, ingest, runs, workflows
+
+    app.include_router(agents.router)
+    app.include_router(runs.router)
+    app.include_router(ingest.router)
+    app.include_router(workflows.router)
+
     _ = TenantContext  # keep the seam import meaningful for wiring
     return app
 
