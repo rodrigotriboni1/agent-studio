@@ -7,11 +7,18 @@ from core.manifest.schema import (
     MemoryConfig,
     RagSourceRef,
 )
+from core.manifest.store import InMemoryManifestStore, ManifestStore
+from core.manifest.versioning import diff, publish, rollback
 
 __all__ = [
     "AgentManifest",
     "Guardrails",
+    "InMemoryManifestStore",
     "ManifestStatus",
+    "ManifestStore",
     "MemoryConfig",
     "RagSourceRef",
+    "diff",
+    "publish",
+    "rollback",
 ]
