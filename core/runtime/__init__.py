@@ -45,9 +45,26 @@ class AgentRuntime(Protocol):
         ...
 
 
+def __getattr__(name: str) -> Any:
+    """Lazily expose the concrete runtime without importing ``agent.py`` (and
+    thus ``langgraph``) at package import time. Keeps ``import core.runtime``
+    dependency-free while ``core.runtime.LangGraphAgentRuntime`` still resolves.
+    """
+    if name in {"LangGraphAgentRuntime", "ModelAccessDenied"}:
+        from core.runtime.agent import LangGraphAgentRuntime, ModelAccessDenied
+
+        return {
+            "LangGraphAgentRuntime": LangGraphAgentRuntime,
+            "ModelAccessDenied": ModelAccessDenied,
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     "RunResult",
     "AgentRuntime",
+    "LangGraphAgentRuntime",
+    "ModelAccessDenied",
     "AgentManifest",
     "ModelProvider",
     "ToolProvider",
