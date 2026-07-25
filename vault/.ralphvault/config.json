@@ -19,9 +19,9 @@
       "source_kind": "path",
       "kind": "repo",
       "stack": "auto",
-      "phase": "pending",
-      "last_sync_commit": null,
-      "last_reconcile_commit": null
+      "phase": "done",
+      "last_sync_commit": "55b6c4e",
+      "last_reconcile_commit": "55b6c4e"
     }
   ]
 }
