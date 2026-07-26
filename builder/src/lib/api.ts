@@ -7,13 +7,23 @@ import type {
   WorkflowRun,
   WorkflowRunRequest,
   WorkflowResumeRequest,
+  Conversation,
+  ChatMessage,
+  SendChatRequest,
+  SendChatResponse,
+  WorkflowChatRequest,
+  ResumeConversationRequest,
 } from './types'
-import { mockFetch } from './mockFetch'
+import { mockFetch, mockStreamChat } from './mockFetch'
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000'
+export const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000'
 export const USE_MOCKS = (import.meta.env.VITE_USE_MOCKS as string | undefined) !== '0'
 
 let tenantId = 'default'
+
+export function getTenantId() {
+  return tenantId
+}
 
 export function setTenantId(id: string) {
   tenantId = id
@@ -102,6 +112,100 @@ export async function runWorkflow(req: WorkflowRunRequest): Promise<WorkflowRun>
 
 export async function resumeWorkflow(runId: string, req: WorkflowResumeRequest): Promise<WorkflowRun> {
   return fetchApi<WorkflowRun>(`/workflows/${runId}/resume`, {
+    method: 'POST',
+    body: JSON.stringify(req),
+  })
+}
+
+// ── Chat API ──────────────────────────────────────────────────────────────────
+
+export async function sendChat(agentId: string, req: SendChatRequest): Promise<SendChatResponse> {
+  return fetchApi<SendChatResponse>(`/agents/${agentId}/chat`, {
+    method: 'POST',
+    body: JSON.stringify(req),
+  })
+}
+
+export async function streamChat(
+  agentId: string,
+  req: SendChatRequest,
+  onToken: (text: string) => void,
+  onDone: (message: ChatMessage) => void,
+): Promise<void> {
+  if (USE_MOCKS) {
+    await mockStreamChat(agentId, req, onToken, onDone)
+    return
+  }
+  const url = `${BASE_URL}/agents/${agentId}/chat/stream`
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-Id': tenantId,
+      },
+      body: JSON.stringify(req),
+    })
+  } catch {
+    // Network error — fall back to regular sendChat
+    const result = await sendChat(agentId, req)
+    onDone(result.message)
+    return
+  }
+  if (!response.ok || !response.body) {
+    // Non-OK or no body — fallback
+    const result = await sendChat(agentId, req)
+    onDone(result.message)
+    return
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.startsWith('data:')) continue
+      const jsonStr = line.slice(5).trim()
+      if (!jsonStr) continue
+      try {
+        const event = JSON.parse(jsonStr) as { type: string; text?: string; message?: ChatMessage }
+        if (event.type === 'token' && event.text) {
+          onToken(event.text)
+        } else if (event.type === 'done' && event.message) {
+          onDone(event.message)
+        }
+      } catch {
+        // skip malformed SSE lines
+      }
+    }
+  }
+}
+
+export async function listConversations(): Promise<Omit<Conversation, 'messages'>[]> {
+  return fetchApi<Omit<Conversation, 'messages'>[]>('/conversations')
+}
+
+export async function getConversation(id: string): Promise<Conversation> {
+  return fetchApi<Conversation>(`/conversations/${id}`)
+}
+
+export async function sendWorkflowChat(req: WorkflowChatRequest): Promise<SendChatResponse> {
+  return fetchApi<SendChatResponse>('/workflows/chat', {
+    method: 'POST',
+    body: JSON.stringify(req),
+  })
+}
+
+export async function resumeConversation(
+  conversationId: string,
+  req: ResumeConversationRequest,
+): Promise<SendChatResponse> {
+  return fetchApi<SendChatResponse>(`/conversations/${conversationId}/resume`, {
     method: 'POST',
     body: JSON.stringify(req),
   })

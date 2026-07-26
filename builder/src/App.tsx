@@ -7,6 +7,8 @@ import RunPanelPage from './pages/RunPanelPage'
 import WorkflowsPage from './pages/WorkflowsPage'
 import WorkflowBuilderPage from './pages/WorkflowBuilderPage'
 import SettingsPage from './pages/SettingsPage'
+import ChatPage from './pages/ChatPage'
+import HistoryPage from './pages/HistoryPage'
 
 export default function App() {
   return (
@@ -21,6 +23,10 @@ export default function App() {
         <Route path="/workflows/new" element={<WorkflowBuilderPage />} />
         <Route path="/workflows/:id" element={<WorkflowBuilderPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/chat/:conversationId" element={<ChatPage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/history/:conversationId" element={<HistoryPage />} />
       </Routes>
     </AppShell>
   )
