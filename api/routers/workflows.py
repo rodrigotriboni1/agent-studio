@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from api.schemas import WorkflowResumeRequest, WorkflowRunRequest, WorkflowRunResponse
 from api.services import AppState, get_app_state
+from api.workflow_defs import normalize_workflow_definition
 from seams.tenancy import TenantContext
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
@@ -44,7 +45,8 @@ def start_workflow(
     tenant: TenantDep,
     state: StateDep,
 ) -> WorkflowRunResponse:
-    run = state.workflow_engine.start(body.definition, body.inputs, tenant=tenant)
+    definition = normalize_workflow_definition(body.definition)
+    run = state.workflow_engine.start(definition, body.inputs, tenant=tenant)
     return WorkflowRunResponse(
         id=run.id,
         state=run.state,

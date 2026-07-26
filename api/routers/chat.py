@@ -35,6 +35,7 @@ from api.chat_schemas import (
 )
 from api.chat_store import ApprovalRequest, Conversation, Message
 from api.services import AppState, get_app_state
+from api.workflow_defs import normalize_workflow_definition
 from core.manifest.schema import AgentManifest
 from core.workflows import WorkflowRun, WorkflowState
 from seams.tenancy import TenantContext, use_tenant
@@ -267,8 +268,9 @@ def workflow_chat(
     store.append(conversation, Message(role="user", content=body.message))
 
     with use_tenant(tenant):
+        definition = normalize_workflow_definition(body.definition)
         run = state.workflow_engine.start(
-            body.definition, {"message": body.message}, tenant=tenant
+            definition, {"message": body.message}, tenant=tenant
         )
     assistant = _assistant_from_run(run)
     store.append(conversation, assistant)
