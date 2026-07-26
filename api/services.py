@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime
 
+from api.chat_store import ConversationStore
 from core.manifest.store import InMemoryManifestStore
 from core.rag import RagIndex, make_rag_index
 from core.workflows.graph import LangGraphWorkflowEngine
@@ -47,6 +48,9 @@ class AppState:
 
         # --- workflow engine -------------------------------------------------
         self.workflow_engine = LangGraphWorkflowEngine()
+
+        # --- conversation store (tenant-scoped chat history) -----------------
+        self.conversation_store = ConversationStore()
 
     # ------------------------------------------------------------------
     # Demo tools
