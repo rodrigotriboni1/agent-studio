@@ -1,240 +1,214 @@
 {
   "project": "agent-studio",
-  "branchName": "ralph/agent-studio-v0",
-  "description": "Governed, multi-tenant, MCP-native builder for agents, RAG and workflows. Adopt LangGraph/LlamaIndex/LiteLLM/pgvector/MCP; build the governance (versioned manifest + 4 seams). Foundation (seams, manifest schema, scaffold, CI) is already committed; these stories build the modules on top.",
-  "seams": [
-    "ToolProvider(MCP)",
-    "ModelProvider(LiteLLM)",
-    "AuthzProvider(manifest->FGA)",
-    "TenantContext"
-  ],
+  "phase": "v1 — wire end-to-end + chat",
+  "branchName": "ralph/agent-studio-v1",
+  "description": "v0 shipped the governed core + a mock-mode builder. v1 makes the whole system COMMUNICATE end-to-end (UI <-> FastAPI <-> core <-> pgvector/LiteLLM, real mode, CORS, streaming) and adds a CHAT surface that consumes agents AND workflows (multi-turn, citations/tool-calls/denials, human-in-the-loop approval inline in chat). Everything stays offline-runnable by default (AGENT_STUDIO_OFFLINE=1) and honors the four seams. Prior plan archived in prd.v0.json.",
+  "seams": ["ToolProvider(MCP)", "ModelProvider(LiteLLM)", "AuthzProvider(manifest->FGA)", "TenantContext"],
+  "chatContract": {
+    "note": "FIXED contract so frontend + backend build in parallel. tenant via X-Tenant-Id header.",
+    "Conversation": "{ id, tenant_id, agent_id?, title, created_at, messages: Message[] }",
+    "Message": "{ role: 'user'|'assistant'|'system', content, citations?: Citation[], tool_calls?: ToolCall[], denied?: string[], approval?: ApprovalRequest, ts }",
+    "ApprovalRequest": "{ run_id, pending_step, resolved?: 'approved'|'rejected' }",
+    "endpoints": {
+      "POST /agents/{id}/chat": "body {message, conversation_id?} -> { conversation_id, message: assistant Message }",
+      "POST /agents/{id}/chat/stream": "SSE; events: {type:'token', text} ... {type:'done', message}",
+      "GET /conversations": "-> Conversation[] (tenant-scoped, no messages)",
+      "GET /conversations/{id}": "-> Conversation (with messages)",
+      "POST /workflows/chat": "body {message, definition, conversation_id?} -> assistant Message OR Message.approval set when a human_approval step pauses",
+      "POST /conversations/{id}/resume": "body {run_id, approved} -> assistant Message (continues the workflow to completion or reject)"
+    }
+  },
   "userStories": [
     {
-      "id": "US-001",
-      "title": "Manifest versioning: diff + rollback + store",
-      "spec": "5.4",
-      "wave": 1,
-      "worktree": "us-001-manifest-versioning",
+      "id": "V1-001",
+      "title": "End-to-end audit + gap report (full stack up, real mode)",
+      "wave": 0,
+      "worktree": "v1-001-audit",
       "model": "sonnet",
       "dependsOn": [],
-      "description": "As a builder, I need immutable published manifest versions with diff and rollback so agent config is IaC.",
+      "description": "As a maintainer, I verify the system actually communicates end-to-end and record the gaps this phase closes.",
       "acceptanceCriteria": [
-        "core/manifest/versioning.py: publish(draft)->immutable version (monotonic), diff(v_a,v_b) via deepdiff, rollback(id,version)->new version copying an older one",
-        "core/manifest/store.py: in-memory ManifestStore (tenant-scoped) with save/get/list/history; Protocol so a DB store swaps in later",
-        "Published versions cannot be mutated (publish creates a new version; draft edits allowed only pre-publish)",
-        "Unit tests offline: publish increments version, diff shows changed fields, rollback creates new version equal to target payload, tenant isolation enforced",
-        "ruff check . clean and pytest -q green"
+        "Stand up the real stack: docker compose db (pgvector) + uvicorn api + vite builder (VITE_USE_MOCKS=0)",
+        "Map EVERY builder API call (builder/src/lib/api.ts) to its FastAPI route; confirm request/response shapes match (note the ingest {documents} wrapper, run {message}, workflow {definition})",
+        "Exercise create->publish->version->rollback->run and workflow run->resume against the LIVE api (curl or a script), record actual outputs",
+        "docs/e2e-audit.md: a table of UI action -> endpoint -> status (works / gap), plus the concrete gaps v1 closes (CORS, chat, streaming, real-mode)",
+        "No code changes required beyond the audit doc; ruff clean"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "Build on core/manifest/schema.py (AgentManifest). Everything tenant-scoped via TenantContext. | DONE: merged via PR."
+      "passes": false,
+      "notes": "Grounds the plan. Reference: API routers already cover agents CRUD/publish/versions/rollback/run, ingest, workflows run/resume."
     },
     {
-      "id": "US-002",
-      "title": "Agent runtime via LangGraph (1 model + 1 tool, governed)",
-      "spec": "5.1",
+      "id": "V1-002",
+      "title": "CORS + app config so the browser can call the API",
       "wave": 1,
-      "worktree": "us-002-runtime",
-      "model": "opus",
+      "worktree": "v1-002-cors",
+      "model": "sonnet",
       "dependsOn": [],
-      "description": "As a user, I run an agent from its manifest: it calls a model and a tool and answers, with governance enforced.",
+      "description": "As the builder UI, I can call the API from http://localhost:5173 without CORS errors.",
       "acceptanceCriteria": [
-        "core/runtime/agent.py implements AgentRuntime.run(manifest,message,tenant)->RunResult using LangGraph (StateGraph: model node <-> tool node loop)",
-        "Model calls ONLY via ModelProvider seam; tools ONLY via ToolProvider seam; every model/tool checked through AuthzProvider against manifest allow-lists (denied ones recorded in RunResult.denied, never invoked)",
-        "TenantContext threaded through every node (use_tenant)",
-        "Guardrails applied (max_tool_calls, temperature, system_suffix)",
-        "Offline test using EchoModelProvider + InMemoryToolProvider: agent invokes an allowed tool and returns; a non-allowed tool is denied not called",
-        "Degrades gracefully if langgraph missing (import guarded) but real path uses LangGraph; ruff clean, pytest green offline"
+        "Add CORSMiddleware to api/main.py allowing the builder origin(s) (env AGENT_STUDIO_CORS_ORIGINS, default http://localhost:5173) + X-Tenant-Id + all methods",
+        "api/config.py: a small settings object (origins, offline flag, database_url, default model/tenant) read from env/.env",
+        "/health returns { status, db: 'up'|'down'|'skipped' } (db check when DATABASE_URL set, else skipped)",
+        "TestClient tests: a preflight OPTIONS returns the CORS headers; /health shape asserted",
+        "ruff clean, pytest green offline; do not break existing api tests"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Hardest core module. Keep the graph small. RunResult contract is fixed in core/runtime/__init__.py. | DONE: merged via PR."
+      "passes": false,
+      "notes": "Small but unblocks real-mode UI. Only touch api/main.py + new api/config.py + tests."
     },
     {
-      "id": "US-003",
-      "title": "RAG: LlamaIndex + pgvector behind RagIndex, cited retrieval",
-      "spec": "5.2",
+      "id": "V1-003",
+      "title": "Conversations + multi-turn agent chat (+ SSE streaming)",
       "wave": 1,
-      "worktree": "us-003-rag",
+      "worktree": "v1-003-chat-backend",
       "model": "opus",
       "dependsOn": [],
-      "description": "As a user, I ingest docs and the agent retrieves chunks with citations, tenant-isolated.",
+      "description": "As a user, I hold a multi-turn conversation with an agent that remembers history and returns citations/tool-calls/denials.",
       "acceptanceCriteria": [
-        "core/rag/llamaindex_pgvector.py implements RagIndex (ingest/retrieve) using LlamaIndex + pgvector; collections namespaced by tenant_id (no cross-tenant leakage)",
-        "core/rag/memory.py: an in-memory RagIndex (embedding-free, keyword/overlap scoring) so examples+tests run offline with zero deps",
-        "retrieve returns RetrievedChunk with source+score+metadata for citation",
-        "Factory core/rag/factory.py picks memory impl when AGENT_STUDIO_OFFLINE=1 or pgvector unavailable, else pgvector",
-        "Offline tests: ingest N docs, retrieve returns relevant chunk with source; tenant A cannot see tenant B docs",
-        "ruff clean, pytest green offline (pgvector path guarded/skipped when no DB)"
+        "core/chat/ (or api/chat): a tenant-scoped ConversationStore (in-memory default; JSON-backed like manifest json_store) holding Conversation/Message per the chatContract",
+        "POST /agents/{id}/chat: appends the user message, runs the agent via LangGraphAgentRuntime with prior history as context (respect manifest.memory), returns the assistant Message (content + citations + tool_calls + denied) and conversation_id",
+        "POST /agents/{id}/chat/stream: Server-Sent Events streaming assistant tokens then a final done event with the full Message; offline echo streams deterministically",
+        "GET /conversations and GET /conversations/{id} (tenant-scoped)",
+        "Governance preserved: model/tool denials from the run surface on the assistant Message; tenant threaded",
+        "TestClient tests offline: two-turn chat keeps history; a denied tool shows in the message; SSE endpoint yields token events then done; conversations list/get",
+        "ruff clean, pytest green offline; follow the FIXED chatContract exactly"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "RagIndex Protocol fixed in core/rag/__init__.py. pgvector integration test may be skipped without DATABASE_URL. | DONE: merged via PR."
+      "passes": false,
+      "notes": "Heart of the chat feature. Build on runtime + seams; do not change core contracts. Keep offline-first."
     },
     {
-      "id": "US-004",
-      "title": "Workflows: multi-step + multi-agent + human-in-the-loop",
-      "spec": "5.3",
+      "id": "V1-004",
+      "title": "Workflow-driven chat (consume workflows, HITL approval inline)",
       "wave": 1,
-      "worktree": "us-004-workflows",
+      "worktree": "v1-004-chat-workflow",
       "model": "opus",
       "dependsOn": [],
-      "description": "As a user, I run a workflow triage->specialist->human-review that pauses for approval and resumes.",
+      "description": "As a user, a chat can run an agent WORKFLOW; when it pauses for human approval, the chat shows an approval prompt I can approve/reject to continue.",
       "acceptanceCriteria": [
-        "core/workflows/graph.py implements WorkflowEngine.start/resume using LangGraph with a durable interrupt for human-in-the-loop (WAITING_APPROVAL state + pending_step)",
-        "Definition is declarative dict (steps: agent|condition|human_approval, edges); conditional branching supported",
-        "resume(run_id, approval) continues a paused run to completion",
-        "Steps that run agents go through the runtime contract (accept an injected runner) so workflows stay decoupled from US-002 internals",
-        "Offline test: start a 3-step workflow, assert it pauses at human_approval, resume with approve, assert COMPLETED; reject path branches",
+        "POST /workflows/chat: body {message, definition, conversation_id?}; starts the workflow (LangGraphWorkflowEngine) seeded by the message; if it pauses at human_approval, returns an assistant Message with approval = {run_id, pending_step}",
+        "POST /conversations/{id}/resume: body {run_id, approved}; resumes the workflow, appends the resulting assistant Message (COMPLETED output or rejected note), marks the prior approval resolved",
+        "Reuses the ConversationStore from V1-003 contract (coordinate on the same Conversation/Message shape); does NOT duplicate it — depends on V1-003 being merged first if needed, else defines a thin shared module both import",
+        "Governance + tenant preserved through start/resume",
+        "TestClient tests offline: a workflow chat pauses with approval set; resume approved -> COMPLETED assistant message; resume rejected -> rejected message",
         "ruff clean, pytest green offline"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "WorkflowEngine contract fixed in core/workflows/__init__.py. Inject the agent runner to avoid a hard dep on US-002. | DONE: merged via PR."
+      "passes": false,
+      "notes": "This is 'chat que consome os workflows'. Sequence after V1-003 (shares ConversationStore)."
     },
     {
-      "id": "US-008",
-      "title": "Builder UI (React + shadcn, minimal) over the API",
-      "spec": "5.5",
-      "wave": 1,
-      "worktree": "us-008-builder",
+      "id": "V1-005",
+      "title": "Builder real-API mode (talk to the live backend)",
+      "wave": 2,
+      "worktree": "v1-005-real-mode",
       "model": "sonnet",
-      "dependsOn": [],
-      "description": "As a builder, I create/edit an agent, attach RAG sources, assemble a workflow and run it, in a minimal UI.",
+      "dependsOn": ["V1-002"],
+      "description": "As a user, the builder talks to the live FastAPI (not mocks) with graceful loading/errors.",
       "acceptanceCriteria": [
-        "builder/ Vite + React + TS + Tailwind + shadcn/ui scaffold that builds (pnpm build)",
-        "Screens: Agents list, Agent editor (name, system prompt, model, allowed tools, RAG sources), Run panel (send message, show answer + citations + denials), Workflow runner (start, approve/reject)",
-        "Typed API client in builder/src/lib/api.ts targeting the FastAPI contract (agents CRUD, run, ingest, versions, workflows); base URL from VITE_API_URL",
-        "Uses a mock/fixture layer so the UI renders without a live backend (MSW or a simple fetch shim toggled by VITE_USE_MOCKS)",
-        "pnpm build succeeds; README in builder/ explains dev + mock mode",
-        "eslint clean"
+        "VITE_USE_MOCKS=0 makes every api.ts call hit the real backend; a vite dev proxy (/api -> http://localhost:8000) OR direct CORS both documented and working",
+        "Loading + error states on all pages (agents list/editor/run, workflows); a small toast/inline error on API failure",
+        "X-Tenant-Id from the sidebar tenant switcher reaches the backend (already wired) and is respected",
+        "builder/README documents mock vs real mode and how to run against the API",
+        "pnpm build + lint green"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Frontend only; treat the API as a contract (ADR-0004 API-first). Independent of Python stories. | DONE: merged via PR."
+      "passes": false,
+      "notes": "Depends on CORS (V1-002). Keep mocks working too (toggle)."
     },
     {
-      "id": "US-005",
-      "title": "FastAPI routers: agents CRUD, run, ingest, versions, workflows",
-      "spec": "api",
+      "id": "V1-006",
+      "title": "Chat UI — converse with agents and workflows",
       "wave": 2,
-      "worktree": "us-005-api",
-      "model": "sonnet",
-      "dependsOn": [
-        "US-001",
-        "US-002",
-        "US-003",
-        "US-004"
-      ],
-      "description": "As an integrator, I drive the whole system over HTTP.",
+      "worktree": "v1-006-chat-ui",
+      "model": "opus",
+      "dependsOn": ["V1-003", "V1-004"],
+      "description": "As a user, I open a Chat page, pick an agent or a workflow, and converse; I see streamed replies, citations, tool-calls, denials, and inline approve/reject for workflow pauses.",
       "acceptanceCriteria": [
-        "api/routers/{agents,runs,ingest,versions,workflows}.py mounted in api/main.py",
-        "Endpoints: POST/GET/PUT /agents, POST /agents/{id}/publish, GET /agents/{id}/versions, POST /agents/{id}/rollback, POST /agents/{id}/run, POST /sources/{name}/ingest, POST /workflows/run, POST /workflows/{id}/resume",
-        "TenantContext resolved from X-Tenant-Id header (default tenant when absent) and threaded into every call",
-        "Pydantic request/response models; wired to core stores/runtime/rag/workflows via the seams (EchoModelProvider + memory impls when AGENT_STUDIO_OFFLINE=1)",
-        "FastAPI TestClient tests offline for each endpoint (happy path + a governance-denied tool case)",
-        "ruff clean, pytest green offline"
+        "New /chat route + sidebar nav item (MessageSquare icon) in the SaaS shell",
+        "Chat page: conversation thread (user/assistant bubbles), composer, agent/workflow selector; streams assistant tokens (SSE) with a typing indicator",
+        "Assistant messages render citations (source chips), tool_calls, and governance denials distinctly",
+        "Workflow mode: when a message returns approval, show an inline Approve/Reject card that calls resume and appends the continuation",
+        "Conversation list (left rail or dropdown) via GET /conversations; new conversation button",
+        "Typed client additions in builder/src/lib/api.ts for the chat endpoints (+ mock handlers so it renders without a backend)",
+        "pnpm build + lint green; verified in the browser"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Depends on wave 1 modules being merged to main first. | DONE: merged via PR."
+      "passes": false,
+      "notes": "Core deliverable. Build to the FIXED chatContract; add mock handlers mirroring it. Depends on chat backend contract."
     },
     {
-      "id": "US-006",
-      "title": "CLI subcommands (agent create/run, ingest, versions)",
-      "spec": "api/cli",
+      "id": "V1-007",
+      "title": "Runs & conversations history UI",
       "wave": 2,
-      "worktree": "us-006-cli",
+      "worktree": "v1-007-history",
       "model": "sonnet",
-      "dependsOn": [
-        "US-001",
-        "US-002",
-        "US-003"
-      ],
-      "description": "As a developer, I drive core flows from the terminal.",
+      "dependsOn": ["V1-003"],
+      "description": "As a user, I browse past conversations and workflow runs.",
       "acceptanceCriteria": [
-        "api/cli.py Typer commands: agent create/list/show/run, source ingest, version list/diff/rollback",
-        "Reads/writes through the same core stores as the API (shared, not duplicated)",
-        "Offline by default (AGENT_STUDIO_OFFLINE=1)",
-        "CliRunner tests for create+run+ingest happy paths",
-        "ruff clean, pytest green"
+        "A /history (or /runs) route + sidebar item listing conversations (GET /conversations) with title, agent, updated time",
+        "Open a conversation to view its messages read-only; link into Chat to continue",
+        "Empty + loading + error states; mock handlers included",
+        "pnpm build + lint green"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "Depends on wave 1. Reuse API service layer where possible. | DONE: merged via PR."
+      "passes": false,
+      "notes": "Depends on chat backend list endpoint (V1-003)."
     },
     {
-      "id": "US-007",
-      "title": "Examples: 1 agent + 1 RAG + 1 workflow that run out of the box",
-      "spec": "examples",
-      "wave": 2,
-      "worktree": "us-007-examples",
-      "model": "sonnet",
-      "dependsOn": [
-        "US-002",
-        "US-003",
-        "US-004"
-      ],
-      "description": "As a new user, `make examples` runs all 3 demos with no code edits and no API key.",
+      "id": "V1-008",
+      "title": "Real engines profile (LiteLLM live + pgvector) without breaking offline",
+      "wave": 3,
+      "worktree": "v1-008-real-engines",
+      "model": "opus",
+      "dependsOn": [],
+      "description": "As an operator, I can run with a real model (LiteLLM) and pgvector, or fully offline.",
       "acceptanceCriteria": [
-        "examples/agent_demo.py: manifest-defined agent uses a tool and answers",
-        "examples/rag_demo.py: ingest sample docs, agent answers citing sources",
-        "examples/workflow_demo.py: triage->specialist->human review, auto-approves in demo, runs end to end",
-        "examples/run_all.py runs all three and prints results; `python -m examples.run_all` works",
-        "All run offline (EchoModelProvider + memory RAG); Makefile `examples` target works",
-        "ruff clean; a smoke test asserts run_all completes"
+        "With OPENAI_API_KEY/AGENT_STUDIO_OFFLINE=0, runs go through LiteLLMModelProvider; offline default unchanged (EchoModelProvider)",
+        "With DATABASE_URL + db up, RAG uses PgVectorRagIndex (embeddings configurable); an integration test runs when DATABASE_URL is set (skipped otherwise)",
+        "docs/running-real.md: how to supply a key, start pgvector, and switch modes; embedding model note",
+        "ruff clean, pytest green offline (real-engine tests skipped without creds/db)"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "Depends on wave 1. This is DoD item: git clone && make dev runs the 3 examples. | DONE: merged via PR."
+      "passes": false,
+      "notes": "Seams already allow this; wire the factory + docs + a gated integration test."
     },
     {
-      "id": "US-009",
-      "title": "Governance v0 end-to-end + seams documentation",
-      "spec": "5.6",
+      "id": "V1-009",
+      "title": "Full-stack run: docker-compose + Makefile + quickstart",
       "wave": 3,
-      "worktree": "us-009-governance",
-      "model": "opus",
-      "dependsOn": [
-        "US-002",
-        "US-005"
-      ],
-      "description": "As a platform owner, governance filters tools/models/sources by manifest, tenant threaded everywhere, documented.",
+      "worktree": "v1-009-stack",
+      "model": "sonnet",
+      "dependsOn": ["V1-002", "V1-005"],
+      "description": "As a new user, one command brings up db + API + UI and I can chat end-to-end.",
       "acceptanceCriteria": [
-        "End-to-end test: an agent whose manifest omits a tool is denied that tool at runtime AND via the API; a disallowed model is refused",
-        "TenantContext demonstrably isolates data/vectors across two tenants in one test",
-        "docs/seams.md documents the 4 seams, current stub vs future target, and how to swap implementations",
-        "docs/governance.md explains manifest allow-lists as the enforced surface",
-        "ruff clean, pytest green offline"
+        "docker-compose adds api + builder services (dev-friendly) alongside db; profiles so `docker compose up` runs the whole stack",
+        "Makefile: `make stack` (db+api+ui), `make api`, `make ui-dev` (exist), `make chat-demo` optional",
+        "docs/quickstart.md updated: real end-to-end path (compose up -> open builder -> chat with an agent -> run a workflow with approval)",
+        "A short scripted smoke (curl) proving /health, create agent, chat once; documented output"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "Ties the governance story together. Depends on runtime + API merged. | DONE: merged via PR."
+      "passes": false,
+      "notes": "Depends on CORS + real-mode."
     },
     {
-      "id": "US-010",
-      "title": "Quickstart + Definition of Done verification",
-      "spec": "docs/DoD",
+      "id": "V1-010",
+      "title": "CI builder build/lint + e2e smoke + mypy stub pin",
       "wave": 3,
-      "worktree": "us-010-docs",
+      "worktree": "v1-010-ci",
       "model": "sonnet",
-      "dependsOn": [
-        "US-005",
-        "US-007",
-        "US-008",
-        "US-009"
-      ],
-      "description": "As a maintainer, I verify the section-7 Definition of Done and document quickstart.",
+      "dependsOn": [],
+      "description": "As a maintainer, CI covers the frontend and a happy-path e2e, and mypy is clean.",
       "acceptanceCriteria": [
-        "docs/quickstart.md: clone -> make dev -> make examples -> make api, with expected output",
-        "A DoD checklist doc (docs/definition-of-done.md) maps each section-7 item to where it is satisfied (with test/file refs)",
-        "README positioning line present and accurate (governed, multi-tenant, MCP-native)",
-        "make check green on a clean clone (documented)",
-        "ruff clean"
+        "CI job builds + lints the builder (pnpm install/build/lint)",
+        "Optional: a minimal API+chat e2e smoke in CI (TestClient script) asserting chat returns a message",
+        "Pin numpy/mypy versions so `mypy core seams api` is clean (remove the advisory workaround)",
+        "CI stays green"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": "Final story. Verifies the whole repo against the spec DoD. | DONE: merged via PR."
+      "passes": false,
+      "notes": "Closes the v0 advisory + broadens CI."
     }
   ]
 }
