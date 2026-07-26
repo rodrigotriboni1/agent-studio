@@ -11,6 +11,8 @@ import {
   Building2,
   Plus,
   ChevronsUpDown,
+  MessageSquare,
+  History,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { setTenantId, listAgents } from '@/lib/api'
@@ -48,6 +50,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
       items: [
         { to: '/agents', label: 'Agents', icon: Bot, badge: agentCount ?? undefined },
         { to: '/workflows', label: 'Workflows', icon: Workflow },
+        { to: '/chat', label: 'Chat', icon: MessageSquare },
+        { to: '/history', label: 'History', icon: History },
       ],
     },
     { label: 'Configure', items: [{ to: '/settings', label: 'Settings', icon: Settings }] },

@@ -90,3 +90,63 @@ export interface WorkflowResumeRequest {
   approval: boolean
   data?: Record<string, unknown>
 }
+
+// ── Chat / Conversation types (chatContract) ──────────────────────────────────
+
+export interface Citation {
+  source: string
+  text: string
+  score?: number
+}
+
+export interface ToolCall {
+  name: string
+  args?: Record<string, unknown>
+  result?: unknown
+}
+
+export interface ApprovalRequest {
+  run_id: string
+  pending_step: string
+  resolved?: 'approved' | 'rejected'
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  citations?: Citation[]
+  tool_calls?: ToolCall[]
+  denied?: string[]
+  approval?: ApprovalRequest
+  ts: string
+}
+
+export interface Conversation {
+  id: string
+  tenant_id: string
+  agent_id?: string
+  title: string
+  created_at: string
+  messages: ChatMessage[]
+}
+
+export interface SendChatRequest {
+  message: string
+  conversation_id?: string
+}
+
+export interface SendChatResponse {
+  conversation_id: string
+  message: ChatMessage
+}
+
+export interface WorkflowChatRequest {
+  message: string
+  definition: WorkflowRunRequest['definition']
+  conversation_id?: string
+}
+
+export interface ResumeConversationRequest {
+  run_id: string
+  approved: boolean
+}

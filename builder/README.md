@@ -25,6 +25,11 @@ and click through the **entire UI without a live backend**. The fixtures include
 To connect to a real backend instead:
 
 ```bash
+# Option A — Vite dev proxy (recommended, avoids CORS in dev)
+VITE_USE_MOCKS=0 pnpm dev
+# The dev server proxies /api/* -> http://localhost:8000/* automatically.
+
+# Option B — direct URL (requires CORSMiddleware on the backend)
 VITE_USE_MOCKS=0 VITE_API_URL=http://localhost:8000 pnpm dev
 ```
 
@@ -37,6 +42,8 @@ VITE_USE_MOCKS=0 VITE_API_URL=http://localhost:8000 pnpm dev
 | `/agents/:id` | **Agent editor** | Edit name, description, system prompt, model, allowed tools (add/remove), allowed models (add/remove), RAG sources (name / top_k / rerank), and guardrails (max_tokens, temperature, max_tool_calls). Save draft, **Publish**, and roll back from the **Version History** list. |
 | `/agents/:id/run` | **Run panel** | Send a message and view the `RunResult`: answer, citations (source + score), tool calls, and **governance denials** (tools/models refused by the manifest allow-list). |
 | `/workflows` | **Workflow runner** | Start the demo workflow (triage → human review → specialist). When it pauses in `WAITING_APPROVAL`, use **Approve** / **Reject** — both call the `resume` endpoint. |
+| `/chat` | **Chat** | Multi-turn conversation with an agent (SSE streaming) or a workflow (HITL). Left rail lists past conversations; agent/workflow selector in the header. Assistant messages show citation chips, tool-call chips, governance denial chips (red), and inline Approve/Reject cards for workflow pauses. |
+| `/history` | **History** | Browse past conversations read-only; click any to read messages. "Continue in chat" link reopens in `/chat/:id`. |
 
 The editor form mirrors `core/manifest/schema.py` (`AgentManifest`), and the run
 panel mirrors `core/runtime` (`RunResult`: output, tool_calls, citations, denied).
@@ -60,6 +67,7 @@ All requests send an `X-Tenant-Id` header (default `default`); override with
 - Run — `POST /agents/{id}/run`
 - RAG ingest — `POST /sources/{name}/ingest`
 - Workflows — `POST /workflows/run`, `POST /workflows/{id}/resume`
+- Chat — `POST /agents/{id}/chat`, `POST /agents/{id}/chat/stream` (SSE), `GET /conversations`, `GET /conversations/{id}`, `POST /workflows/chat`, `POST /conversations/{id}/resume`
 
 ## Build & lint
 
