@@ -3,7 +3,12 @@
   "phase": "v1 — wire end-to-end + chat",
   "branchName": "ralph/agent-studio-v1",
   "description": "v0 shipped the governed core + a mock-mode builder. v1 makes the whole system COMMUNICATE end-to-end (UI <-> FastAPI <-> core <-> pgvector/LiteLLM, real mode, CORS, streaming) and adds a CHAT surface that consumes agents AND workflows (multi-turn, citations/tool-calls/denials, human-in-the-loop approval inline in chat). Everything stays offline-runnable by default (AGENT_STUDIO_OFFLINE=1) and honors the four seams. Prior plan archived in prd.v0.json.",
-  "seams": ["ToolProvider(MCP)", "ModelProvider(LiteLLM)", "AuthzProvider(manifest->FGA)", "TenantContext"],
+  "seams": [
+    "ToolProvider(MCP)",
+    "ModelProvider(LiteLLM)",
+    "AuthzProvider(manifest->FGA)",
+    "TenantContext"
+  ],
   "chatContract": {
     "note": "FIXED contract so frontend + backend build in parallel. tenant via X-Tenant-Id header.",
     "Conversation": "{ id, tenant_id, agent_id?, title, created_at, messages: Message[] }",
@@ -54,8 +59,8 @@
         "ruff clean, pytest green offline; do not break existing api tests"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Small but unblocks real-mode UI. Only touch api/main.py + new api/config.py + tests."
+      "passes": true,
+      "notes": "Small but unblocks real-mode UI. Only touch api/main.py + new api/config.py + tests. | DONE: merged (#16/#17), verified live E2E."
     },
     {
       "id": "V1-003",
@@ -75,8 +80,8 @@
         "ruff clean, pytest green offline; follow the FIXED chatContract exactly"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "Heart of the chat feature. Build on runtime + seams; do not change core contracts. Keep offline-first."
+      "passes": true,
+      "notes": "Heart of the chat feature. Build on runtime + seams; do not change core contracts. Keep offline-first. | DONE: merged (#16/#17), verified live E2E."
     },
     {
       "id": "V1-004",
@@ -95,8 +100,8 @@
         "ruff clean, pytest green offline"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "This is 'chat que consome os workflows'. Sequence after V1-003 (shares ConversationStore)."
+      "passes": true,
+      "notes": "This is 'chat que consome os workflows'. Sequence after V1-003 (shares ConversationStore). | DONE: merged (#16/#17), verified live E2E."
     },
     {
       "id": "V1-005",
@@ -104,7 +109,9 @@
       "wave": 2,
       "worktree": "v1-005-real-mode",
       "model": "sonnet",
-      "dependsOn": ["V1-002"],
+      "dependsOn": [
+        "V1-002"
+      ],
       "description": "As a user, the builder talks to the live FastAPI (not mocks) with graceful loading/errors.",
       "acceptanceCriteria": [
         "VITE_USE_MOCKS=0 makes every api.ts call hit the real backend; a vite dev proxy (/api -> http://localhost:8000) OR direct CORS both documented and working",
@@ -114,8 +121,8 @@
         "pnpm build + lint green"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "Depends on CORS (V1-002). Keep mocks working too (toggle)."
+      "passes": true,
+      "notes": "Depends on CORS (V1-002). Keep mocks working too (toggle). | DONE: merged (#16/#17), verified live E2E."
     },
     {
       "id": "V1-006",
@@ -123,7 +130,10 @@
       "wave": 2,
       "worktree": "v1-006-chat-ui",
       "model": "opus",
-      "dependsOn": ["V1-003", "V1-004"],
+      "dependsOn": [
+        "V1-003",
+        "V1-004"
+      ],
       "description": "As a user, I open a Chat page, pick an agent or a workflow, and converse; I see streamed replies, citations, tool-calls, denials, and inline approve/reject for workflow pauses.",
       "acceptanceCriteria": [
         "New /chat route + sidebar nav item (MessageSquare icon) in the SaaS shell",
@@ -135,8 +145,8 @@
         "pnpm build + lint green; verified in the browser"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Core deliverable. Build to the FIXED chatContract; add mock handlers mirroring it. Depends on chat backend contract."
+      "passes": true,
+      "notes": "Core deliverable. Build to the FIXED chatContract; add mock handlers mirroring it. Depends on chat backend contract. | DONE: merged (#16/#17), verified live E2E."
     },
     {
       "id": "V1-007",
@@ -144,7 +154,9 @@
       "wave": 2,
       "worktree": "v1-007-history",
       "model": "sonnet",
-      "dependsOn": ["V1-003"],
+      "dependsOn": [
+        "V1-003"
+      ],
       "description": "As a user, I browse past conversations and workflow runs.",
       "acceptanceCriteria": [
         "A /history (or /runs) route + sidebar item listing conversations (GET /conversations) with title, agent, updated time",
@@ -153,8 +165,8 @@
         "pnpm build + lint green"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "Depends on chat backend list endpoint (V1-003)."
+      "passes": true,
+      "notes": "Depends on chat backend list endpoint (V1-003). | DONE: merged (#16/#17), verified live E2E."
     },
     {
       "id": "V1-008",
@@ -180,7 +192,10 @@
       "wave": 3,
       "worktree": "v1-009-stack",
       "model": "sonnet",
-      "dependsOn": ["V1-002", "V1-005"],
+      "dependsOn": [
+        "V1-002",
+        "V1-005"
+      ],
       "description": "As a new user, one command brings up db + API + UI and I can chat end-to-end.",
       "acceptanceCriteria": [
         "docker-compose adds api + builder services (dev-friendly) alongside db; profiles so `docker compose up` runs the whole stack",
